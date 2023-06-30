@@ -1,0 +1,68 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Elixir CI
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build, format, credo, test and generate the documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1.16.0
+      with:
+        version-type: 'strict'
+        version-file: '.tool-versions'
+    - name: Formatter
+      run: mix format --check-formatted
+    - name: Restore dependencies cache
+      uses: actions/cache@v3
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Compile
+      run: mix compile --warnings-as-errors
+    - name: Run credo
+      run: mix credo
+    - name: Run tests
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: MIX_ENV=test mix coveralls.github
+    - name: Generate the documentation
+      run: mix docs
+    - name: Upload the documentation
+      uses: actions/upload-pages-artifact@v1.0.8
+      with:
+        name: github-pages
+        path: doc/
+        if-no-files-found: error
+  
+  gh-pages:
+    name: Publish the documentation
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
